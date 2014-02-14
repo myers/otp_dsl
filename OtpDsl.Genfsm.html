@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>OtpDsl.Genfsm</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="css/style.css" type="text/css" media="screen" charset="utf-8" />
+
+    <script type="text/javascript" charset="utf-8">
+      relpath = '';
+      if (relpath != '') relpath += '/';
+    </script>
+
+    <script type="text/javascript" charset="utf-8" src="js/jquery.js"></script>
+    <script type="text/javascript" charset="utf-8" src="js/app.js"></script>
+  </head>
+
+  <body>
+    <script type="text/javascript" charset="utf-8">
+      if (window.top.frames.main) document.body.className = 'frames';
+    </script>
+
+    <div id="content">
+      <div class="breadcrumbs">otp_dsl v0.0.1 &rarr; <a href="overview.html">Overview</a> &rarr; OtpDsl &rarr; <a href="OtpDsl.Genfsm.html">Genfsm</a></div>
+
+      <h1>
+        OtpDsl.Genfsm
+        
+      </h1>
+
+      
+
+      <ul class="summary_links">
+        
+        
+          <li><a href="#summary">Summary</a></li>
+        
+        
+          <li><a href="#functions_details">Functions</a></li>
+        
+        
+          <li><a href="#macros_details">Macros</a></li>
+        
+        
+        
+      </ul>
+
+      
+        <div id="moduledoc" class="docstring">
+          <h2>OtpDsl.Gemfsm</h2>
+
+<p>A DSL wrapper for Elixir&#39;s GenFSM.Behaviour. For example:</p>
+
+<pre><code class="elixir">defmodule Listen.NewFSM do
+
+  use OtpDsl.Genfsm,  register: {:local, :listen_fsm},
+                      initial_state: :start,
+                      init_params: []
+
+  @timeout 3*1000
+
+  defrecord CallInfo, from: &quot;&quot;, to: &quot;&quot;, suspicious_segments: 0
+
+  ####################
+  #
+  # Events → our external API
+
+  events do
+    call_initiated(from, to)
+    suspicious_phrase_heard
+    hang_up
+  end
+
+  ####################
+  #
+  # States → transitions we implement
+
+  in_state(:start) do
+    { :call_initiated, from, to } -&gt;
+      IO.puts &quot;Initiating a call from #{from} to #{to}&quot;
+      next_state(:listening, CallInfo.new(from: from, to: to))
+  end
+
+  in_state(:listening) do
+    { :hang_up } -&gt;
+      debug(&quot;Hangup&quot;, context)
+      next_state(:start, nil)
+
+    { :suspicious_phrase_heard } -&gt;
+      debug(&quot;Heard something suspicious&quot;, context)
+      next_state(:transcribing, context.update_suspicious_segments(&amp;1+1), @timeout)
+  end
+
+  in_state(:transcribing) do
+    { :hang_up } -&gt;
+      debug(&quot;Report on call&quot;, context)
+      next_state(:start, CallData.new)
+
+    { :timeout } -&gt;
+      next_state(:listening, context)
+  end
+
+  # Helpers
+
+  defp debug(msg, CallInfo[from: from, to: to, suspicious_segments: suspicious_segments]) do
+    IO.puts(&quot;Call from #{from} to #{to}: #{msg}&quot;)
+    if suspicious_segments &gt; 0 do
+      IO.puts(&quot;    (suspicious_segments: #{suspicious_segments})&quot;)
+    end
+  end
+end
+</code></pre>
+
+<p>There are three sections in this code</p>
+
+<ol>
+<li>The <code>use</code> stanza.</li>
+<li>The <code>event list</code></li>
+<li>The <code>state definitions</code></li>
+</ol>
+
+<h3><code>context</code> vs. <code>state</code></h3>
+
+<p>In an Erlang server, state is passed between callbacks. However, it gets confusing talking 
+about this server state when we also have the concept of state machine states. So, in this
+module, we use the convention that the server state is called the <code>context</code>.</p>
+
+<h3>The <code>use</code> stanza</h3>
+
+<p>As well as including the OptDel.Genfsm behaviour in your module, the <code>use</code>
+call lets you set various options:</p>
+
+<table><thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>register</td>
+<td>{:local, :fsm }</td>
+<td>The first argument to <code>start_link</code>, used to register a name for this module</td>
+</tr>
+<tr>
+<td>initial_state</td>
+<td>:state</td>
+<td>The name of the initial state of the FSM</td>
+</tr>
+<tr>
+<td>context</td>
+<td>[]</td>
+<td>The initial context</td>
+</tr>
+</tbody></table>
+
+<h3>The Event List</h3>
+
+<p>In GenFSM, events are triggered by calls to public functions. Each function then calls <code>send_event</code>
+to cause the appropriate callback to be invoked.</p>
+
+<p>This code is pretty boilerplate, so we abstract it into an <code>events</code> stanza:</p>
+
+<pre><code class="elixir">events do
+  call_initiated(from, to)
+ suspicious_phrase_heard
+  hang_up
+end
+</code></pre>
+
+<p>This block simply creates the following functions:</p>
+
+<pre><code class="elixir">def call_initiated(from, to) do
+  :gen_fsm.send_event(«servername», :call_initiated, from, to)
+end
+def suspicious_phrase_heard do
+  :gen_fsm.send_event(«servername», :suspicious_phrase_heard)
+end
+def hang_up do
+  :gen_fsm.send_event(«servername», hang_up)
+end
+</code></pre>
+
+<p>You&#39;re free to write these functions by hand, too.</p>
+
+<h3>The States</h3>
+
+<p>We represent each state using <code>in_state(«name»)</code>. Within the block, separate clauses
+match each incoming event (with optional parameters). The code corresponding with the match
+will end with a call to <code>next_state</code>, which takes the new state name, the new context, and an optional timeout (in mS).</p>
+
+<pre><code class="elixir">in_state(:listening) do
+  { :hang_up } -&gt;
+    debug(&quot;Hangup&quot;, context)
+    next_state(:start, nil)
+
+  { :suspicious_phrase_heard } -&gt;
+    debug(&quot;Heard something suspicious&quot;, context)
+    next_state(:transcribing, context.update_suspicious_segments(&amp;1+1), @timeout)
+end
+</code></pre>
+
+<p>So, if we&#39;re in state <code>listening</code> and we get a <code>hang_up</code> event, we
+call <code>debug</code> to print a message, and then transition to the state
+state, with no context. If instead we get a
+<code>suspicious_phrase_heard</code> event, we transition to the <code>transcribing</code>
+state. We pass an updated context where we increment the number of
+suspicious segments, and we set a timeout.</p>
+
+<p>If a timeout fires, it generates a <code>timeout</code> event in the next state
+(there&#39;s an example in the <code>transcribing</code> state of the sample app)</p>
+
+        </div>
+      
+
+      
+
+      
+
+      
+        <h2 id="summary">Summary<div class="detail_header_links"><a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a></div></h2>
+        <table class="summary">
+          <tr>
+  <td class="summary_signature"><a href="#events/1">events(list1)</a></td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#generate_event/1">generate_event(arg1)</a></td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#generate_state/2">generate_state(state, arg2)</a></td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#in_state/2">in_state(state, list2)</a></td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#next_state/2">next_state(new_state, context)</a></td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#next_state/3">next_state(new_state, context, timeout)</a></td>
+  
+</tr>
+
+        </table>
+      
+
+      
+
+      
+        <div id="functions_details" class="details_list">
+          <h2>Functions</h2>
+          <div class="detail">
+  <div class="detail_header" id="generate_event/1">
+    <span class="signature"><strong>generate_event(arg1)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#generate_event/1" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="generate_state/2">
+    <span class="signature"><strong>generate_state(state, arg2)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#generate_state/2" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="next_state/2">
+    <span class="signature"><strong>next_state(new_state, context)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#next_state/2" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="next_state/3">
+    <span class="signature"><strong>next_state(new_state, context, timeout)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#next_state/3" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+
+        </div>
+      
+
+      
+        <div id="macros_details" class="details_list">
+          <h2>Macros</h2>
+          <div class="detail">
+  <div class="detail_header" id="events/1">
+    <span class="signature"><strong>events(list1)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(macro)</span>
+      <a href="#events/1" class="detail_link" title="Link to this macro">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="in_state/2">
+    <span class="signature"><strong>in_state(state, list2)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(macro)</span>
+      <a href="#in_state/2" class="detail_link" title="Link to this macro">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+
+        </div>
+      
+
+      
+    </div>
+  </body>
+</html>

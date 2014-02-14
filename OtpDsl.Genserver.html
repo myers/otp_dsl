@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>OtpDsl.Genserver</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="css/style.css" type="text/css" media="screen" charset="utf-8" />
+
+    <script type="text/javascript" charset="utf-8">
+      relpath = '';
+      if (relpath != '') relpath += '/';
+    </script>
+
+    <script type="text/javascript" charset="utf-8" src="js/jquery.js"></script>
+    <script type="text/javascript" charset="utf-8" src="js/app.js"></script>
+  </head>
+
+  <body>
+    <script type="text/javascript" charset="utf-8">
+      if (window.top.frames.main) document.body.className = 'frames';
+    </script>
+
+    <div id="content">
+      <div class="breadcrumbs">otp_dsl v0.0.1 &rarr; <a href="overview.html">Overview</a> &rarr; OtpDsl &rarr; <a href="OtpDsl.Genserver.html">Genserver</a></div>
+
+      <h1>
+        OtpDsl.Genserver
+        
+      </h1>
+
+      
+
+      <ul class="summary_links">
+        
+        
+          <li><a href="#summary">Summary</a></li>
+        
+        
+          <li><a href="#functions_details">Functions</a></li>
+        
+        
+          <li><a href="#macros_details">Macros</a></li>
+        
+        
+        
+      </ul>
+
+      
+        <div id="moduledoc" class="docstring">
+          <h2>OtpDsl.Genserver</h2>
+
+<p>A simple DSL wrapper for GenServer modules. It reduces duplication by
+exploiting the fact that a GenServer module typically has an API function
+that calls a corresponding handle_call function that runs on the server
+process. We wrap those two functions into one macro. For example, the following
+module is a GenServer with a single API, <code>factorial</code>.</p>
+
+<pre><code>defmodule FactorialServer do
+  use OtpDsl.Genserver
+
+  defcall factorial!(n) do
+    reply(Enum.reduce(1..n, 1, &amp;(&amp;1*&amp;2)))
+  end
+end
+</code></pre>
+
+<p>You could start this from a supervisor, or manually with
+<code>FactorialServer.start_link</code>. You can then call the function 
+in the server process using </p>
+
+<pre><code>FactorialServer.factorial!(10)
+</code></pre>
+
+<p>The <code>use</code> function takes the following options:</p>
+
+<p><code>register</code>
+  The specification of the name under which to register the server. For
+  example, if you wanted to register globally as <code>:fred</code>, do</p>
+
+<pre><code>  use OtpDsl.Genserver, register: { :global, :fred }
+</code></pre>
+
+<p>The option defaults to <code>{ :local, my_name }</code>, where <code>my_name</code> is
+  an atom derived from the module name.</p>
+
+<p><code>initial_state</code> 
+  A value representing an initial state for tbe server. Defaults to
+  <code>nil</code>.</p>
+
+<h3>Example</h3>
+
+<p>Here&#39;s a server that implements a simple key/value store:</p>
+
+<pre><code>defmodule KvServer do
+  use OtpDsl.Genserver, initial_state: HashDict.new
+
+  defcall put(key, value), kv_store do
+    reply(value, Dict.put(kv_store, key, value))
+  end
+
+  defcall get(key), kv_store do
+    reply(Dict.get(kv_store, key))
+  end
+end
+</code></pre>
+
+<p>Note how both functions specify that the state should be stored 
+in the variable <code>kv_store</code>. The first returns an updated state as the second
+argument to reply, and the second leaves the state unchanged.</p>
+
+        </div>
+      
+
+      
+
+      
+
+      
+        <h2 id="summary">Summary<div class="detail_header_links"><a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a></div></h2>
+        <table class="summary">
+          <tr>
+  <td class="summary_signature"><a href="#defcall/3">defcall(defn, arg2, list3)</a></td>
+  
+    <td class="summary_synopsis"><p>Define both a module API and the function that handles calls to that API in the server.
+For example, if you write</p>
+</td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#defcast/3">defcast(defn, arg2, list3)</a></td>
+  
+    <td class="summary_synopsis"><p>Define both a module API and the function for broadcasting the message to the server.
+For example, if you write</p>
+</td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#name_from/1">name_from(module_name)</a></td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#noreply/0">noreply()</a></td>
+  
+    <td class="summary_synopsis"><p>Generate a &quot;no reply&quot; from a call handler. No value will be returned.
+The optional parameter is the new state value.
+If omitted, it defaults to the value of the state passed into <code>handle_call</code></p>
+</td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#noreply/1">noreply(new_state)</a></td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#reply/1">reply(value)</a></td>
+  
+    <td class="summary_synopsis"><p>Generate a reply from a call handler. The value will be
+returned as the second element of the :reply tuple. The optional
+second parameter gives the new state value. If omitted, it
+defaults to the value of the state passed into <code>handle_call</code></p>
+</td>
+  
+</tr>
+<tr>
+  <td class="summary_signature"><a href="#reply/2">reply(value, new_state)</a></td>
+  
+</tr>
+
+        </table>
+      
+
+      
+
+      
+        <div id="functions_details" class="details_list">
+          <h2>Functions</h2>
+          <div class="detail">
+  <div class="detail_header" id="name_from/1">
+    <span class="signature"><strong>name_from(module_name)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#name_from/1" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="noreply/0">
+    <span class="signature"><strong>noreply()</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#noreply/0" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"><p>Generate a &quot;no reply&quot; from a call handler. No value will be returned.
+The optional parameter is the new state value.
+If omitted, it defaults to the value of the state passed into <code>handle_call</code>.</p>
+</div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="noreply/1">
+    <span class="signature"><strong>noreply(new_state)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#noreply/1" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="reply/1">
+    <span class="signature"><strong>reply(value)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#reply/1" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"><p>Generate a reply from a call handler. The value will be
+returned as the second element of the :reply tuple. The optional
+second parameter gives the new state value. If omitted, it
+defaults to the value of the state passed into <code>handle_call</code>.</p>
+</div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="reply/2">
+    <span class="signature"><strong>reply(value, new_state)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(function)</span>
+      <a href="#reply/2" class="detail_link" title="Link to this function">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"></div>
+  
+</div>
+
+        </div>
+      
+
+      
+        <div id="macros_details" class="details_list">
+          <h2>Macros</h2>
+          <div class="detail">
+  <div class="detail_header" id="defcall/3">
+    <span class="signature"><strong>defcall(defn, arg2, list3)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(macro)</span>
+      <a href="#defcall/3" class="detail_link" title="Link to this macro">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"><p>Define both a module API and the function that handles calls to that API in the server.
+For example, if you write</p>
+
+<pre><code>defcall increment(n) do
+  reply(n+1)
+end
+</code></pre>
+
+<p>You will get the following two functions defined</p>
+
+<p>def increment(n) do
+     gen<em>server.call(my</em>name, {:increment, n})
+   end</p>
+
+<p>def handle_call({:increment, n}, _from, «state») do
+     { :reply, n+1, «state» }
+   end</p>
+
+<p>In this case, our server maintains no state of its own, so we fake out a
+state (shown as «state» above).</p>
+
+<p>If you need state, then pass in the name of the state parameter as a second
+argument to defcall, and pass a new state out as a second parameter
+to the <code>reply</code> call.</p>
+
+<pre><code>defmodule KvServer do
+  use OtpDsl.Genserver, initial_state: HashDict.new
+
+  defcall put(key, value), kv_store do
+    reply(value, Dict.put(kv_store, key, value))
+  end
+
+  defcall get(key), kv_store do
+    reply(Dict.get(kv_store, key), kv_store)
+  end
+end
+</code></pre>
+
+<p>In this example, we make the state available in the variable
+<code>kv_store</code>.</p>
+</div>
+  
+</div>
+<div class="detail">
+  <div class="detail_header" id="defcast/3">
+    <span class="signature"><strong>defcast(defn, arg2, list3)</strong></span>
+    <div class="detail_header_links">
+      <span class="detail_type">(macro)</span>
+      <a href="#defcast/3" class="detail_link" title="Link to this macro">#</a>
+      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
+    </div>
+  </div>
+  
+  <div class="docstring"><p>Define both a module API and the function for broadcasting the message to the server.
+For example, if you write</p>
+
+<pre><code>defcast chat_message(msg) do
+  IO.puts msg
+  noreply
+end
+</code></pre>
+
+<p>You will get the following two functions defined:</p>
+
+<pre><code>def chat_message(msg) do
+  gen_server.cast(my_name, {:chat_message, msg})
+end
+
+def handle_cast({:chat_message, msg}, _from, «state») do
+  IO.puts msg
+  { :noreply, «state» }
+end
+</code></pre>
+
+<p>In this case, our server maintains no state of its own, so we fake out a
+state (shown as «state» above).</p>
+
+<p>If you need state, then pass in the name of the state parameter as a second
+argument to <code>defcast</code>, and pass the new state to <code>noreply</code>.</p>
+
+<pre><code>defmodule ChatServer do
+  use OtpDsl.Genserver, initial_state: []
+
+  defcast message(text), history do
+    noreply [text|history]
+  end
+
+  defcall log(), history do
+    reply history, history
+  end
+end
+</code></pre>
+
+<p>In this example, we make the state available in the variable
+<code>history</code>.</p>
+</div>
+  
+</div>
+
+        </div>
+      
+
+      
+    </div>
+  </body>
+</html>
