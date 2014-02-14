@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>OtpDsl.Genfsm</title>
+    <title>OtpDsl</title>
     <meta charset="utf-8">
     <link rel="stylesheet" href="css/style.css" type="text/css" media="screen" charset="utf-8" />
 
@@ -20,10 +20,10 @@
     </script>
 
     <div id="content">
-      <div class="breadcrumbs">otp_dsl v0.0.1 &rarr; <a href="overview.html">Overview</a> &rarr; <a href="OtpDsl.html">OtpDsl</a> &rarr; <a href="OtpDsl.Genfsm.html">Genfsm</a></div>
+      <div class="breadcrumbs">otp_dsl v0.0.1 &rarr; <a href="overview.html">Overview</a> &rarr; <a href="OtpDsl.html">OtpDsl</a></div>
 
       <h1>
-        OtpDsl.Genfsm
+        OtpDsl
         
       </h1>
 
@@ -32,13 +32,7 @@
       <ul class="summary_links">
         
         
-          <li><a href="#summary">Summary</a></li>
         
-        
-          <li><a href="#functions_details">Functions</a></li>
-        
-        
-          <li><a href="#macros_details">Macros</a></li>
         
         
         
@@ -46,7 +40,160 @@
 
       
         <div id="moduledoc" class="docstring">
-          <h2>OtpDsl.Gemfsm</h2>
+          <h1>OtpDsl</h1>
+
+<p>A set of simple Elixir DSLs that wrap the common uses of OTP
+servers. For example, here&#39;s the code for a <code>:gen_server</code> that exports
+a function <code>factorial!</code>. When called, the actual factorial code is
+executed in its own process.</p>
+
+<pre><code class="elixir">defmodule FactorialServer do
+  use OtpDsl.Genserver
+
+  defcall factorial!(n) do
+    reply(Enum.reduce(1..n, 1, &amp;(&amp;1*&amp;2)))
+  end
+end
+</code></pre>
+
+<p>You could start this from a supervisor, or manually with
+<code>FactorialServer.start_link</code>. You can then call the function 
+in the server process using</p>
+
+<pre><code class="elixir">FactorialServer.factorial!(20)
+</code></pre>
+
+<p>Similarly, here&#39;s a different DSL that simplifies the creation of
+<code>:gen_fsm</code> state machines.</p>
+
+<pre><code class="elixir">defmodule Listen.NewFSM do
+
+  use OtpDsl.Genfsm,  register: {:local, :listen_fsm},
+                      initial_state: :start,
+                      init_params: []
+
+  @timeout 3*1000
+
+  defrecord CallInfo, from: &quot;&quot;, to: &quot;&quot;, suspicious_segments: 0
+
+  ####################
+  #
+  # Events → our external API
+
+  events do
+    call_initiated(from, to)
+    suspicious_phrase_heard
+    hang_up
+  end
+
+  ####################
+  #
+  # States → transitions we implement
+
+  in_state(:start) do
+    { :call_initiated, from, to } -&gt;
+      IO.puts &quot;Initiating a call from #{from} to #{to}&quot;
+      next_state(:listening, CallInfo.new(from: from, to: to))
+  end
+
+  in_state(:listening) do
+    { :hang_up } -&gt;
+      debug(&quot;Hangup&quot;, context)
+      next_state(:start, nil)
+
+    { :suspicious_phrase_heard } -&gt;
+      debug(&quot;Heard something suspicious&quot;, context)
+      next_state(:transcribing, context.update_suspicious_segments(&amp;1+1), @timeout)
+  end
+
+  in_state(:transcribing) do
+    { :hang_up } -&gt;
+      debug(&quot;Report on call&quot;, context)
+      next_state(:start, CallData.new)
+
+    { :timeout } -&gt;
+      next_state(:listening, context)
+  end
+
+  # Helpers
+
+  defp debug(msg, CallInfo[from: from, to: to, suspicious_segments: suspicious_segments]) do
+    IO.puts(&quot;Call from #{from} to #{to}: #{msg}&quot;)
+    if suspicious_segments &gt; 0 do
+      IO.puts(&quot;    (suspicious_segments: #{suspicious_segments})&quot;)
+    end
+  end
+end
+</code></pre>
+
+<p>The intent behind these DSLs it to remove the boilerplate in server
+code. While Erlang has Emacs macros that generate it, Elixir has
+built-in macros that make it redundant.</p>
+
+<p>Here&#39;s more in-depth documentation for each DSL</p>
+
+<h2>OtpDsl.Genserver</h2>
+
+<p>A simple DSL wrapper for GenServer modules. It reduces duplication by
+exploiting the fact that a GenServer module typically has an API function
+that calls a corresponding handle_call function that runs on the server
+process. We wrap those two functions into one macro. For example, the following
+module is a GenServer with a single API, <code>factorial</code>.</p>
+
+<pre><code>defmodule FactorialServer do
+  use OtpDsl.Genserver
+
+  defcall factorial!(n) do
+    reply(Enum.reduce(1..n, 1, &amp;(&amp;1*&amp;2)))
+  end
+end
+</code></pre>
+
+<p>You could start this from a supervisor, or manually with
+<code>FactorialServer.start_link</code>. You can then call the function 
+in the server process using </p>
+
+<pre><code>FactorialServer.factorial!(10)
+</code></pre>
+
+<p>The <code>use</code> function takes the following options:</p>
+
+<p><code>register</code>
+  The specification of the name under which to register the server. For
+  example, if you wanted to register globally as <code>:fred</code>, do</p>
+
+<pre><code>  use OtpDsl.Genserver, register: { :global, :fred }
+</code></pre>
+
+<p>The option defaults to <code>{ :local, my_name }</code>, where <code>my_name</code> is
+  an atom derived from the module name.</p>
+
+<p><code>initial_state</code> 
+  A value representing an initial state for tbe server. Defaults to
+  <code>nil</code>.</p>
+
+<h3>Example</h3>
+
+<p>Here&#39;s a server that implements a simple key/value store:</p>
+
+<pre><code>defmodule KvServer do
+  use OtpDsl.Genserver, initial_state: HashDict.new
+
+  defcall put(key, value), kv_store do
+    reply(value, Dict.put(kv_store, key, value))
+  end
+
+  defcall get(key), kv_store do
+    reply(Dict.get(kv_store, key))
+  end
+end
+</code></pre>
+
+<p>Note how both functions specify that the state should be stored 
+in the variable <code>kv_store</code>. The first returns an updated state as the second
+argument to reply, and the second leaves the state unchanged.</p>
+
+<h2>OtpDsl.Gemfsm</h2>
 
 <p>A DSL wrapper for Elixir&#39;s GenFSM.Behaviour. For example:</p>
 
@@ -209,136 +356,32 @@ suspicious segments, and we set a timeout.</p>
 <p>If a timeout fires, it generates a <code>timeout</code> event in the next state
 (there&#39;s an example in the <code>transcribing</code> state of the sample app)</p>
 
-        </div>
-      
+<h2>Add to your Project</h2>
 
-      
+<p>Add the following to your list of dependencies in <code>mix.exs</code>:</p>
 
-      
+<pre><code class="elixir">{ :otp_dsl, github: &quot;pragdave/otp_dsl }
+</code></pre>
 
-      
-        <h2 id="summary">Summary<div class="detail_header_links"><a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a></div></h2>
-        <table class="summary">
-          <tr>
-  <td class="summary_signature"><a href="#events/1">events(list1)</a></td>
-  
-</tr>
-<tr>
-  <td class="summary_signature"><a href="#generate_event/1">generate_event(arg1)</a></td>
-  
-</tr>
-<tr>
-  <td class="summary_signature"><a href="#generate_state/2">generate_state(state, arg2)</a></td>
-  
-</tr>
-<tr>
-  <td class="summary_signature"><a href="#in_state/2">in_state(state, list2)</a></td>
-  
-</tr>
-<tr>
-  <td class="summary_signature"><a href="#next_state/2">next_state(new_state, context)</a></td>
-  
-</tr>
-<tr>
-  <td class="summary_signature"><a href="#next_state/3">next_state(new_state, context, timeout)</a></td>
-  
-</tr>
+<h2>Copyright</h2>
 
-        </table>
-      
+<p>Copyright © 2013 Dave Thomas, The Pragmatic Programmers</p>
 
-      
-
-      
-        <div id="functions_details" class="details_list">
-          <h2>Functions</h2>
-          <div class="detail">
-  <div class="detail_header" id="generate_event/1">
-    <span class="signature"><strong>generate_event(arg1)</strong></span>
-    <div class="detail_header_links">
-      <span class="detail_type">(function)</span>
-      <a href="#generate_event/1" class="detail_link" title="Link to this function">#</a>
-      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
-    </div>
-  </div>
-  
-  <div class="docstring"></div>
-  
-</div>
-<div class="detail">
-  <div class="detail_header" id="generate_state/2">
-    <span class="signature"><strong>generate_state(state, arg2)</strong></span>
-    <div class="detail_header_links">
-      <span class="detail_type">(function)</span>
-      <a href="#generate_state/2" class="detail_link" title="Link to this function">#</a>
-      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
-    </div>
-  </div>
-  
-  <div class="docstring"></div>
-  
-</div>
-<div class="detail">
-  <div class="detail_header" id="next_state/2">
-    <span class="signature"><strong>next_state(new_state, context)</strong></span>
-    <div class="detail_header_links">
-      <span class="detail_type">(function)</span>
-      <a href="#next_state/2" class="detail_link" title="Link to this function">#</a>
-      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
-    </div>
-  </div>
-  
-  <div class="docstring"></div>
-  
-</div>
-<div class="detail">
-  <div class="detail_header" id="next_state/3">
-    <span class="signature"><strong>next_state(new_state, context, timeout)</strong></span>
-    <div class="detail_header_links">
-      <span class="detail_type">(function)</span>
-      <a href="#next_state/3" class="detail_link" title="Link to this function">#</a>
-      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
-    </div>
-  </div>
-  
-  <div class="docstring"></div>
-  
-</div>
+<p>Licensed for use under the same terms as Elixir</p>
 
         </div>
       
 
       
-        <div id="macros_details" class="details_list">
-          <h2>Macros</h2>
-          <div class="detail">
-  <div class="detail_header" id="events/1">
-    <span class="signature"><strong>events(list1)</strong></span>
-    <div class="detail_header_links">
-      <span class="detail_type">(macro)</span>
-      <a href="#events/1" class="detail_link" title="Link to this macro">#</a>
-      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
-    </div>
-  </div>
-  
-  <div class="docstring"></div>
-  
-</div>
-<div class="detail">
-  <div class="detail_header" id="in_state/2">
-    <span class="signature"><strong>in_state(state, list2)</strong></span>
-    <div class="detail_header_links">
-      <span class="detail_type">(macro)</span>
-      <a href="#in_state/2" class="detail_link" title="Link to this macro">#</a>
-      <a class="to_top_link" href="#content" title="To the top of the page">&uarr;</a>
-    </div>
-  </div>
-  
-  <div class="docstring"></div>
-  
-</div>
 
-        </div>
+      
+
+      
+
+      
+
+      
+
       
 
       
